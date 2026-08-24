@@ -11,7 +11,7 @@ export async function renderPdf(latex: string): Promise<Buffer> {
   try {
     await writeFile(source, latex, 'utf8');
     await new Promise<void>((resolve, reject) => {
-      const child = spawn('tectonic', ['--untrusted', '--outdir', dir, source], { cwd: dir, windowsHide: true });
+      const child = spawn(process.env.TECTONIC_BIN ?? 'tectonic', ['--untrusted', '--outdir', dir, source], { cwd: dir, windowsHide: true });
       let stderr = ''; child.stderr.on('data', chunk => { stderr += chunk.toString(); });
       child.on('error', error => reject(new Error(`Tectonic não está instalado: ${error.message}`)));
       child.on('close', code => code === 0 ? resolve() : reject(new Error(stderr.slice(-2000) || `Tectonic terminou com código ${code}`)));
