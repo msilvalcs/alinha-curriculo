@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import { readFile } from 'node:fs/promises';
+import { renderLatex, type ResumeData } from './latex-resume.js';
 
 type Provider = 'openai' | 'anthropic' | 'opencode';
 const system = `Você é um agente de adaptação de currículos. Use somente fatos comprovados no currículo-base. Nunca invente competência, ferramenta, cargo, resultado, data, certificação ou experiência. Compare cada requisito da vaga com evidências explícitas. Retorne JSON com: summary, confirmedKeywords, missingRequirements, resumeSections, atsReport. O currículo deve ser direcionado à vaga, mas qualquer lacuna deve ser marcada como ausente.`;
@@ -29,5 +31,7 @@ export async function adaptResume(resume: string, job: string) {
   const provider = selectedProvider();
   const key = provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : provider === 'opencode' ? process.env.OPENCODE_API_KEY : process.env.OPENAI_API_KEY;
   if (!key) return { mode: 'demo', provider, summary: `Configure a chave do provedor ${provider} para ativar o agente.`, confirmedKeywords: [], missingRequirements: [], resumeSections: { source: resume }, atsReport: { score: null, note: 'Análise de demonstração.' } };
-  return provider === 'anthropic' ? runAnthropic(resume, job) : runOpenAI(resume, job);
+  const result = provider === 'anthropic' ? await runAnthropic(resume, job) : await runOpenAI(resume, job);
+  const template = await readFile(new URL('../templates/pt-br/curriculo.tex', import.meta.url), 'utf8');
+  return { ...result, template: 'celio-resume-template-pt-br', latex: renderLatex((result.resumeSections ?? {}) as ResumeData, template) };
 }

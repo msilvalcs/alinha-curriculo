@@ -25,6 +25,10 @@ npm run dev
 
 O agente aceita `openai`, `anthropic` e `opencode`, selecionados por `AI_PROVIDER`. OpenAI e OpenCode usam o protocolo compatível com OpenAI; para OpenCode, configure também `OPENCODE_BASE_URL` e `OPENCODE_MODEL`. Anthropic usa a API nativa. O restante da aplicação recebe o mesmo formato JSON independentemente do provedor.
 
+## Template de currículo
+
+O projeto incorpora o template LaTeX em `templates/pt-br/curriculo.tex`, baseado no repositório `celiobjunior/resume-template` e mantido sob Apache 2.0. O agente retorna o campo `latex` junto com a análise, pronto para ser compilado em PDF.
+
 Sem a chave do provedor escolhido, a API responde em modo de demonstração.
 
 ## LinkedIn
