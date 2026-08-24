@@ -51,10 +51,11 @@
     }
     return '';
   }
-  window.addEventListener('DOMContentLoaded',()=>{const input=document.getElementById('jobFile');if(input)input.onchange=async e=>{const file=e.target.files[0];if(!file)return;const label=input.previousElementSibling.querySelector('strong');label.textContent='Lendo '+file.name+'...';const text=await readJobDocument(file);if(text){document.getElementById('job').value=text;label.textContent=file.name;}else{label.textContent=file.name+' - cole o texto';alert('Não consegui extrair o texto deste documento. Cole a descrição da vaga no campo acima ou use um arquivo TXT/PDF com texto selecionável.');}};});
+  window.addEventListener('DOMContentLoaded',()=>{const input=document.getElementById('jobFile');if(input){input.onchange=async e=>{const file=e.target.files[0];if(!file)return;const label=input.previousElementSibling.querySelector('strong');label.textContent='Lendo '+file.name+'...';const text=await readJobDocument(file);if(text.trim().length>20){document.getElementById('job').value=text;label.textContent='✓ '+file.name;}else{label.textContent='⚠ '+file.name+' - sem texto';alert('O PDF foi selecionado, mas não contém texto extraível. Use um PDF com texto selecionável ou cole a descrição da vaga no campo acima.');}};const drop=input.parentElement;if(drop)drop.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')input.click();});}});
   async function analyzeV2(){
     const form=new FormData();
-    const resumeFile=document.getElementById('file').files[0],jobFile=document.getElementById('jobFile').files[0];
+    const resumeFile=document.getElementById('file').files[0],jobFile=document.getElementById('jobFile').files[0],jobText=document.getElementById('job').value.trim();
+    if(!jobFile&&jobText.length<30){alert('Selecione o PDF da vaga ou cole uma descrição com pelo menos 30 caracteres.');return;}
     if(resumeFile)form.append('resumeFile',resumeFile); else form.append('resumeText',document.getElementById('resume').value);
     if(jobFile)form.append('jobFile',jobFile); else form.append('jobText',document.getElementById('job').value);
     const button=document.querySelector('.primary');button.disabled=true;button.textContent='Processando documentos...';
