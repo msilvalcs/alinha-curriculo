@@ -1,0 +1,28 @@
+import Fastify from 'fastify';
+import multipart from '@fastify/multipart';
+import { extractDocumentText } from './text-extraction.js';
+import { adaptResume } from './resume-agent.js';
+
+const app = Fastify({ logger: true });
+await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+
+app.get('/health', async () => ({ ok: true, service: 'alinhacv' }));
+
+app.post('/api/analyze', async (request, reply) => {
+  const parts = request.parts();
+  let resume = '';
+  let job = '';
+  for await (const part of parts) {
+    if (part.type === 'file') {
+      const buffer = await part.toBuffer();
+      const text = await extractDocumentText(part.filename, buffer);
+      if (part.fieldname === 'resumeFile') resume = text;
+      if (part.fieldname === 'jobFile') job = text;
+    } else if (part.fieldname === 'resumeText') resume = String(part.value);
+    else if (part.fieldname === 'jobText') job = String(part.value);
+  }
+  if (!resume.trim() || !job.trim()) return reply.code(400).send({ error: 'Currículo e descrição da vaga são obrigatórios.' });
+  return adaptResume(resume, job);
+});
+
+app.listen({ port: Number(process.env.PORT ?? 3000), host: '127.0.0.1' });
