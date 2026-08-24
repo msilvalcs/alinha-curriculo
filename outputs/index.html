@@ -51,7 +51,7 @@
     }
     return '';
   }
-  window.addEventListener('DOMContentLoaded',()=>{const input=document.getElementById('jobFile');if(input){input.onchange=async e=>{const file=e.target.files[0];if(!file)return;const label=input.previousElementSibling.querySelector('strong');label.textContent='Lendo '+file.name+'...';const text=await readJobDocument(file);if(text.trim().length>20){document.getElementById('job').value=text;label.textContent='✓ '+file.name;}else{label.textContent='⚠ '+file.name+' - sem texto';alert('O PDF foi selecionado, mas não contém texto extraível. Use um PDF com texto selecionável ou cole a descrição da vaga no campo acima.');}};const drop=input.parentElement;if(drop)drop.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')input.click();});}});
+  window.addEventListener('DOMContentLoaded',()=>{const input=document.getElementById('jobFile');if(input){input.onchange=async e=>{const file=e.target.files[0];if(!file)return;const label=input.parentElement?.querySelector('strong');if(label)label.textContent='Lendo '+file.name+'...';const text=await readJobDocument(file);if(text.trim().length>20){document.getElementById('job').value=text;if(label)label.textContent='✓ '+file.name;}else{if(label)label.textContent='⚠ '+file.name+' - sem texto';alert('O PDF foi selecionado, mas não contém texto extraível. Use um PDF com texto selecionável ou cole a descrição da vaga no campo acima.');}};const drop=input.parentElement;if(drop)drop.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')input.click();});}});
   async function analyzeV2(){
     const form=new FormData();
     const resumeFile=document.getElementById('file').files[0],jobFile=document.getElementById('jobFile').files[0],jobText=document.getElementById('job').value.trim();
