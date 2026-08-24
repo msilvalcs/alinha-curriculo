@@ -23,7 +23,7 @@ copy .env.example .env
 npm run dev
 ```
 
-O agente aceita `openai`, `anthropic` e `opencode`, selecionados por `AI_PROVIDER`. OpenAI e OpenCode usam o protocolo compatível com OpenAI; para OpenCode, configure também `OPENCODE_BASE_URL` e `OPENCODE_MODEL`. Anthropic usa a API nativa. O restante da aplicação recebe o mesmo formato JSON independentemente do provedor.
+O agente aceita `openai`, `anthropic`, `opencode` e `nvidia`, selecionados por `AI_PROVIDER`. OpenAI, OpenCode e NVIDIA usam o protocolo compatível com OpenAI; para OpenCode e NVIDIA, configure também endpoint e modelo. Anthropic usa a API nativa. O restante da aplicação recebe o mesmo formato JSON independentemente do provedor.
 
 ## Template de currículo
 
