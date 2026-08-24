@@ -13,7 +13,8 @@ const input = (resume: string, job: string) => `CURRÍCULO-BASE:\n${resume}\n\nV
 async function runOpenAI(resume: string, job: string) {
   const provider = selectedProvider();
   const client = new OpenAI({ apiKey: provider === 'opencode' ? process.env.OPENCODE_API_KEY : process.env.OPENAI_API_KEY, ...(provider === 'opencode' ? { baseURL: process.env.OPENCODE_BASE_URL } : {}) });
-  const result = await client.chat.completions.create({ model: provider === 'opencode' ? process.env.OPENCODE_MODEL : process.env.OPENAI_MODEL ?? 'gpt-5', response_format: { type: 'json_object' }, messages: [{ role: 'system', content: system }, { role: 'user', content: input(resume, job) }] });
+  const model = provider === 'opencode' ? (process.env.OPENCODE_MODEL ?? 'opencode-default') : (process.env.OPENAI_MODEL ?? 'gpt-5');
+  const result = await client.chat.completions.create({ model, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: system }, { role: 'user', content: input(resume, job) }] });
   return JSON.parse(result.choices[0]?.message.content ?? '{}');
 }
 
