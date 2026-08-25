@@ -67,6 +67,7 @@
     document.getElementById('job').value=result.jobText||document.getElementById('job').value;
     analyze();
     if(result.summary){const summary=document.querySelector('#output h3 + p');if(summary)summary.textContent=result.summary;}
+    if(result.latex)await renderFinalPdf(result.latex);
     if(result.latex){let link=document.getElementById('latexDownload');if(!link){link=document.createElement('a');link.id='latexDownload';link.className='ghost';link.textContent='Baixar .tex';document.querySelector('#results .result-head > div:last-child')?.append(link);}link.href=URL.createObjectURL(new Blob([result.latex],{type:'text/plain'}));link.download='curriculo-ajustado.tex';}
     if(result.confirmedKeywords?.length)document.getElementById('chips').innerHTML=result.confirmedKeywords.map(t=>`<span class="chip">${t}</span>`).join('');
     setTimeout(()=>{
@@ -87,6 +88,14 @@
     document.getElementById('file')?.addEventListener('change',()=>show(document.getElementById('file'),'resumePreview'));
     document.getElementById('jobFile')?.addEventListener('change',()=>show(document.getElementById('jobFile'),'jobPreview'));
   });
+</script>
+<script>
+  async function renderFinalPdf(latex){
+    let panel=document.getElementById('finalPdfPanel');
+    if(!panel){panel=document.createElement('div');panel.id='finalPdfPanel';panel.className='card';panel.style.marginTop='18px';panel.innerHTML='<div class="result-head"><div><h2>Preview do currículo final</h2><p class="hint">PDF compilado pelo template LaTeX.</p></div><span class="pill ok">Gerado</span></div><iframe id="finalPdfPreview" title="Preview do currículo final" style="width:100%;height:720px;border:1px solid #dbe4e8;border-radius:12px;background:#fff"></iframe>';document.getElementById('results').append(panel);}
+    const frame=document.getElementById('finalPdfPreview');frame.src='about:blank';
+    try{const response=await fetch('/api/render-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({latex})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Falha ao gerar PDF');const bytes=Uint8Array.from(atob(data.data),char=>char.charCodeAt(0));frame.src=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));}catch(error){panel.querySelector('.pill').textContent='Erro';panel.querySelector('.hint').textContent=error.message;}
+  }
 </script>
 </body>
 </html>
