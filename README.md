@@ -25,6 +25,10 @@ npm run dev
 
 O agente aceita `openai`, `anthropic`, `opencode` e `nvidia`, selecionados por `AI_PROVIDER`. OpenAI, OpenCode e NVIDIA usam o protocolo compatível com OpenAI; para OpenCode e NVIDIA, configure também endpoint e modelo. Anthropic usa a API nativa. O restante da aplicação recebe o mesmo formato JSON independentemente do provedor.
 
+O Jev, via SDK oficial `@typesafe-ai/sdk`, executa uma etapa separada de checagem de evidências do currículo gerado. Ele classifica cada resumo, competência, experiência e formação como sustentado, contradito, sem evidência ou revisão humana. Afirmações não sustentadas com confiança suficiente são retiradas do LaTeX gerado e aparecem como revisão pendente. Antes de enviar dados ao TypeSafe, a integração remove e-mail, telefone, endereço, idade, estado civil, links públicos e o nome identificado; envia apenas texto profissional pertinente. Configure `TYPESAFE_API_KEY` e opcionalmente `TYPESAFE_MODEL` para ativar. Sem a chave, todas as afirmações ficam marcadas para revisão humana e não são filtradas automaticamente.
+
+`npm test` roda o harness automatizado com transporte falso, sem credenciais. `npm run test:jev:live` faz uma chamada real de verificação com um exemplo sintético quando `TYPESAFE_API_KEY` está configurada.
+
 ## Template de currículo
 
 O projeto incorpora o template LaTeX em `templates/pt-br/curriculo.tex`, baseado no repositório `celiobjunior/resume-template` e mantido sob Apache 2.0. O agente retorna o campo `latex` junto com a análise, pronto para ser compilado em PDF.
