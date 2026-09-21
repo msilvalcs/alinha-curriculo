@@ -33,13 +33,22 @@ app.post('/api/job-skills', async (request, reply) => {
     if (job.trim().length < 20) return reply.code(400).send({ error: 'A descrição da vaga precisa ter pelo menos 20 caracteres.' });
     let extracted;
     try { extracted = await extractJobRequirements(job); }
-    catch (error) { return reply.code(502).send({ error: error instanceof Error ? error.message : 'Falha ao extrair requisitos com o provedor de IA.' }); }
-    if (extracted.mode !== 'ai') return reply.code(503).send({ error: extracted.message, code: 'AI_PROVIDER_NOT_CONFIGURED' });
+    catch (error) { extracted = { mode: 'fallback' as const, provider: 'literal', requirements: literalJobRequirements(job), message: error instanceof Error ? error.message : 'O provedor não respondeu.' }; }
+    if (extracted.mode !== 'ai') {
+      const requirements = extracted.requirements.length ? extracted.requirements : literalJobRequirements(job);
+      const candidates = requirements.map(item => item.skill);
+      return { skills: candidates, contexts: Object.fromEntries(requirements.map(item => [item.skill.toLocaleLowerCase(), item.context])), extractionProvider: 'literal', reviewStatus: 'manual_required', requiresManualReview: true, fallbackReason: extracted.message };
+    }
     const candidates = extracted.requirements.map(item => item.skill);
     const review = await verifyJobSkills(job, candidates);
     return { skills: review.status === 'completed' ? review.skills.filter((item: { verdict: string }) => item.verdict === 'present').map((item: { skill: string }) => item.skill) : candidates, contexts: Object.fromEntries(extracted.requirements.map(item => [item.skill.toLocaleLowerCase(), item.context])), extractionProvider: extracted.provider, reviewStatus: review.status, review, requiresManualReview: review.status !== 'completed' };
   } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Falha ao ler a descrição da vaga.' }); }
 });
+
+function literalJobRequirements(job: string) {
+  const knownTerms = ['JavaScript', 'TypeScript', 'React', 'Vue', 'Angular', 'HTML', 'CSS', 'responsive design', 'component-based architecture', 'Storybook', 'Node.js', 'Python', 'Java', 'C#', '.NET', 'ASP.NET Core', 'SQL', 'MySQL', 'PostgreSQL', 'MongoDB', 'Git', 'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP', 'REST API', 'GraphQL', 'Scrum', 'Kanban', 'Agile', 'Figma', 'Excel', 'Power BI', 'Tableau', 'English', 'Português', 'Inglês', 'Espanhol'];
+  return knownTerms.filter(term => new RegExp(`(^|[^\\p{L}\\p{N}])${term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}([^\\p{L}\\p{N}]|$)`, 'iu').test(job)).map(skill => ({ skill, context: 'Encontrada literalmente na descrição da vaga.' }));
+}
 
 app.post('/api/render-pdf', async (request, reply) => {
   try {
