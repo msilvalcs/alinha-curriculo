@@ -7,6 +7,7 @@ export type ResumeData = {
   summary?: string;
   experience?: Array<{ company: string; location?: string; role: string; dates: string; bullets: string[] }>;
   skills?: string[];
+  skillLevels?: Record<string, string>;
   languages?: string[];
   education?: Array<{ institution: string; location?: string; course: string; dates: string }>;
 };
@@ -23,7 +24,7 @@ function entry(item: { company: string; location?: string; role: string; dates: 
 export function renderLatex(data: ResumeData, template: string) {
   const experience = (data.experience ?? []).map(entry).join('\n\n');
   const education = (data.education ?? []).map(item => `    \\cventry{${tex(item.institution)}}{${tex(item.location)}}{${tex(item.course)}}{${tex(item.dates)}}`).join('\n');
-  const skills = (data.skills ?? []).map(item => `        \\item ${tex(item)}`).join('\n');
+  const skills = (data.skills ?? []).map(item => `        \\item ${tex(item)}${data.skillLevels?.[item] ? ` (${tex(data.skillLevels[item])})` : ''}`).join('\n');
   const languages = (data.languages ?? []).join(', ');
   return template
     .replace(/Nome Completo/g, tex(data.name ?? 'Nome Completo'))

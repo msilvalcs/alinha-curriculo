@@ -5,7 +5,7 @@ import fastifyStatic from '@fastify/static';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractDocumentText } from './text-extraction.js';
-import { adaptResume } from './resume-agent.js';
+import { adaptResume, extractJobRequirements } from './resume-agent.js';
 import { renderPdf } from './pdf-render.js';
 import { loadSkillProfile, saveSkillProfile, skillProfileSchema } from './skill-profile.js';
 import { verifyJobSkills } from './typesafe-review.js';
@@ -31,11 +31,13 @@ app.post('/api/job-skills', async (request, reply) => {
       else if (part.type === 'field' && part.fieldname === 'jobText') job = String(part.value);
     }
     if (job.trim().length < 20) return reply.code(400).send({ error: 'A descrição da vaga precisa ter pelo menos 20 caracteres.' });
-    const knownTerms = ['JavaScript', 'TypeScript', 'React', 'Vue', 'Angular', 'HTML', 'CSS', 'responsive design', 'component-based architecture', 'Storybook', 'Node.js', 'Python', 'Java', 'C#', '.NET', 'ASP.NET Core', 'SQL', 'MySQL', 'PostgreSQL', 'MongoDB', 'Git', 'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP', 'REST API', 'GraphQL', 'Scrum', 'Kanban', 'Agile', 'Figma', 'Excel', 'Power BI', 'Tableau', 'English', 'Português', 'Inglês', 'Espanhol'];
-    const candidates = knownTerms.filter(term => new RegExp(`(^|[^\\p{L}\\p{N}])${term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}([^\\p{L}\\p{N}]|$)`, 'iu').test(job));
+    let extracted;
+    try { extracted = await extractJobRequirements(job); }
+    catch (error) { return reply.code(502).send({ error: error instanceof Error ? error.message : 'Falha ao extrair requisitos com o provedor de IA.' }); }
+    if (extracted.mode !== 'ai') return reply.code(503).send({ error: extracted.message, code: 'AI_PROVIDER_NOT_CONFIGURED' });
+    const candidates = extracted.requirements.map(item => item.skill);
     const review = await verifyJobSkills(job, candidates);
-    const accepted: string[] = review.status === 'completed' ? review.skills.filter((item: { verdict: string }) => item.verdict === 'present').map((item: { skill: string }) => item.skill) : candidates;
-    return { skills: accepted.slice(0, 30), reviewStatus: review.status, review, requiresManualReview: review.status !== 'completed' };
+    return { skills: review.status === 'completed' ? review.skills.filter((item: { verdict: string }) => item.verdict === 'present').map((item: { skill: string }) => item.skill) : candidates, contexts: Object.fromEntries(extracted.requirements.map(item => [item.skill.toLocaleLowerCase(), item.context])), extractionProvider: extracted.provider, reviewStatus: review.status, review, requiresManualReview: review.status !== 'completed' };
   } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Falha ao ler a descrição da vaga.' }); }
 });
 

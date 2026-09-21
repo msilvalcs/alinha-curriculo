@@ -25,7 +25,7 @@
       <div class="controls"><select class="select" id="tone"><option>Tom profissional e direto</option><option>Mais executivo</option><option>Mais conciso para ATS</option></select><label class="trust" style="max-width:340px"><input id="providerConsent" type="checkbox"> Entendo que currículo e vaga serão enviados ao provedor de IA configurado. O Jev recebe o texto profissional com dados de contato removidos.</label><button class="primary" onclick="analyzeV2()">Analisar e ajustar currículo →</button></div>
     </section>
     <section id="skillQuestionnaire" class="card"><h2>3. Confirme suas competências</h2><p class="hint">A lista sugere apenas termos da vaga. Marque o que você realmente sabe. A resposta será guardada neste dispositivo/instalação para facilitar próximas candidaturas.</p><div id="skillList" class="skill-list"></div><div class="question-actions"><span id="profileStatus" class="profile-note">Nada será adicionado ao currículo sem sua confirmação.</span><button id="saveProfile" class="secondary" type="button">Salvar perfil</button></div></section>
-    <section id="results"><div class="results-grid"><div class="card"><div class="result-head"><div><h2>Leitura da vaga</h2><p class="hint">Sinais encontrados para esta versão.</p></div><span class="pill ok">Boa base</span></div><div class="score"><div class="ring"><b>82</b></div><div><strong>Aderência estimada</strong><p class="hint">Antes do ajuste: 68%</p></div></div><label class="label">Palavras-chave confirmadas</label><div class="chips" id="chips"></div><div class="audit"><div><span class="dot"></span><span><b>Sem competências novas:</b> termos foram selecionados apenas quando encontrados no currículo-base.</span></div><div><span class="dot"></span><span><b>O que falta:</b> resultados mensuráveis e ferramentas específicas não identificadas.</span></div></div></div><div class="card"><div class="result-head"><div><h2>Currículo ajustado</h2><p class="hint">Estrutura otimizada para leitura humana e ATS.</p></div><div><button class="ghost" onclick="copyOutput()">Copiar texto</button> <button class="ghost" onclick="printResume()">Abrir para PDF</button></div></div><div class="output" id="output"></div></div></div></section>
+    <section id="results"><div class="results-grid"><div class="card"><div class="result-head"><div><h2>Leitura da vaga</h2><p class="hint">Compatibilidade baseada no perfil confirmado e na análise concluída.</p></div><span class="pill" id="analysisMode">Análise</span></div><div><strong>Relatório ATS</strong><p class="hint" id="atsReport">O relatório real aparece após a análise.</p></div><label class="label">Competências consideradas</label><div class="chips" id="chips"></div><div class="audit"><div><span class="dot"></span><span id="missingRequirements"></span></div></div></div><div class="card"><div class="result-head"><div><h2>Currículo ajustado</h2><p class="hint">Texto extraído da resposta real do agente.</p></div><div><button class="ghost" onclick="copyOutput()">Copiar texto</button></div></div><div class="output" id="output"></div></div></div></section>
   </main>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -72,14 +72,25 @@
     button.disabled=false;button.textContent='Analisar e ajustar currículo →';
     document.getElementById('resume').value=result.resumeText||document.getElementById('resume').value;
     document.getElementById('job').value=result.jobText||document.getElementById('job').value;
-    analyze();
-    if(result.summary){const summary=document.querySelector('#output h3 + p');if(summary)summary.textContent=result.summary;}
+    if(result.mode==='demo'){alert(result.summary||'Nenhum provedor de IA está configurado.');return;}
+    renderGeneratedResume(result.resumeSections||{});
+    document.getElementById('results').style.display='block';
+    document.getElementById('analysisMode').textContent=result.provider||'Análise concluída';
+    document.getElementById('atsReport').textContent=typeof result.atsReport==='string'?result.atsReport:JSON.stringify(result.atsReport||{note:'Relatório não retornado'},null,2);
+    document.getElementById('missingRequirements').textContent=result.missingRequirements?.length?`Lacunas identificadas pela análise: ${result.missingRequirements.join(', ')}`:'Nenhuma lacuna foi retornada pelo agente. Revise as exigências da vaga manualmente.';
     if(result.evidenceReview)showEvidenceReview(result.evidenceReview);
     if(result.latex)await renderFinalPdf(result.latex);
     if(result.latex){let link=document.getElementById('latexDownload');if(!link){link=document.createElement('a');link.id='latexDownload';link.className='ghost';link.textContent='Baixar .tex';document.querySelector('#results .result-head > div:last-child')?.append(link);}link.href=URL.createObjectURL(new Blob([result.latex],{type:'text/plain'}));link.download='curriculo-ajustado.tex';}
-    if(result.confirmedKeywords?.length)document.getElementById('chips').innerHTML=result.confirmedKeywords.map(t=>`<span class="chip">${t}</span>`).join('');
+    const chosen=result.resumeSections?.skills||[];document.getElementById('chips').innerHTML=chosen.map(t=>{const chip=document.createElement('span');chip.className='chip';chip.textContent=t;return chip.outerHTML;}).join('');
   }
   window.addEventListener('DOMContentLoaded',()=>{const b=document.querySelector('.primary');if(b)b.onclick=analyzeV2;});
+  function renderGeneratedResume(data){
+    const root=document.getElementById('output');root.replaceChildren();
+    const heading=(text,level=3)=>{const el=document.createElement(`h${level}`);el.textContent=text;root.append(el);};
+    const para=text=>{if(!text)return;const el=document.createElement('p');el.textContent=text;root.append(el);};
+    const list=items=>{if(!items?.length)return;const ul=document.createElement('ul');for(const text of items){const li=document.createElement('li');li.textContent=text;ul.append(li);}root.append(ul);};
+    heading(data.name||'Currículo');para([data.city,data.email,data.linkedin,data.github].filter(Boolean).join(' | '));heading('Resumo profissional');para(data.summary);heading('Competências');list(data.skills);heading('Experiência profissional');for(const job of data.experience||[]){heading(`${job.role} | ${job.company}`,4);para(`${job.dates}${job.location?` | ${job.location}`:''}`);list(job.bullets);}heading('Formação acadêmica');for(const school of data.education||[]){heading(`${school.course} | ${school.institution}`,4);para(`${school.dates}${school.location?` | ${school.location}`:''}`);}heading('Idiomas');list(data.languages);
+  }
 </script>
 <script>
   window.skillProfile={skills:[]};
@@ -87,22 +98,24 @@
   async function loadSavedProfile(){try{const response=await fetch('/api/profile');if(response.ok){const saved=await response.json();window.skillProfile=saved;}}catch{document.getElementById('profileStatus').textContent='Perfil local indisponível até iniciar o servidor.';}}
   function renderSkillQuestions(skills){
     const saved=new Map((window.skillProfile?.skills||[]).map(item=>[item.skill.toLowerCase(),item]));
-    window.skillProfile={skills:[...new Map(skills.map(skill=>[skill.toLowerCase(),skill])).values()].map(skill=>{const previous=saved.get(skill.toLowerCase());return previous?{...previous,skill}: {skill,status:''};})};
+    const requested=skills.map(entry=>typeof entry==='string'?{skill:entry,context:''}:entry);
+    window.skillProfile={skills:[...new Map(requested.map(entry=>[entry.skill.toLowerCase(),entry])).values()].map(entry=>{const previous=saved.get(entry.skill.toLowerCase());return previous?{...previous,...entry,skill:entry.skill}: {...entry,status:''};})};
     const section=document.getElementById('skillQuestionnaire'),list=document.getElementById('skillList');section.style.display='block';list.replaceChildren();
     for(const [index,item] of window.skillProfile.skills.entries()){
-      const row=document.createElement('div');row.className='skill-row';
+    const row=document.createElement('div');row.className='skill-row';
       const title=document.createElement('strong');title.textContent=item.skill;row.append(title);
-      const status=document.createElement('select');status.setAttribute('aria-label',`Seu conhecimento em ${item.skill}`);status.innerHTML='<option value="">Selecione uma resposta</option>'+Object.entries(skillLabels).map(([value,label])=>`<option value="${value}">${label}</option>`).join('');status.value=item.status||'';status.onchange=()=>{window.skillProfile.skills[index].status=status.value;level.disabled=status.value!=='experienced';evidence.disabled=status.value!=='experienced';};row.append(status);
-      const level=document.createElement('select');level.setAttribute('aria-label',`Nível em ${item.skill}`);level.innerHTML='<option value="">Nível (opcional)</option><option value="basic">Básico</option><option value="intermediate">Intermediário</option><option value="advanced">Avançado</option>';level.value=item.level||'';level.disabled=item.status!=='experienced';level.onchange=()=>window.skillProfile.skills[index].level=level.value;row.append(level);
-      const evidence=document.createElement('input');evidence.placeholder='Ex.: projeto, estudo ou uso';evidence.setAttribute('aria-label',`Evidência em ${item.skill}`);evidence.value=item.evidence||'';evidence.disabled=item.status!=='experienced';evidence.onchange=()=>window.skillProfile.skills[index].evidence=evidence.value;row.append(evidence);list.append(row);
+      const level=document.createElement('select');level.setAttribute('aria-label',`Nível em ${item.skill}`);level.innerHTML='<option value="">Nível (opcional)</option><option value="basic">Básico</option><option value="intermediate">Intermediário</option><option value="advanced">Avançado</option>';level.value=item.level||'';level.disabled=item.status!=='experienced';level.onchange=()=>window.skillProfile.skills[index].level=level.value;
+      const evidence=document.createElement('input');evidence.placeholder=item.context||'Ex.: projeto, estudo ou uso';evidence.setAttribute('aria-label',`Evidência em ${item.skill}`);evidence.value=item.evidence||'';evidence.disabled=item.status!=='experienced';evidence.oninput=()=>window.skillProfile.skills[index].evidence=evidence.value;
+      const status=document.createElement('select');status.setAttribute('aria-label',`Seu conhecimento em ${item.skill}`);status.innerHTML='<option value="">Selecione uma resposta</option>'+Object.entries(skillLabels).map(([value,label])=>`<option value="${value}">${label}</option>`).join('');status.value=item.status||'';status.onchange=()=>{window.skillProfile.skills[index].status=status.value;level.disabled=status.value!=='experienced';evidence.disabled=status.value!=='experienced';};row.append(status,level,evidence);
+      list.append(row);
     }
     document.getElementById('profileStatus').textContent='Competências anteriores podem estar preenchidas. Revise todas antes de continuar.';
     section.scrollIntoView({behavior:'smooth',block:'center'});
   }
   async function identifyJobSkills(){
-    const text=document.getElementById('job').value.trim(),file=document.getElementById('jobFile').files[0];if(!file&&text.length<20){alert('Insira uma descrição de vaga com pelo menos 20 caracteres.');return;}
+    const text=document.getElementById('job').value.trim(),file=document.getElementById('jobFile').files[0];if(!file&&text.length<20){alert('Insira uma descrição de vaga com pelo menos 20 caracteres.');return;}if(!document.getElementById('providerConsent')?.checked){alert('Confirme o envio da descrição ao provedor de IA para identificar os requisitos.');return;}
     const button=document.getElementById('identifySkills');button.disabled=true;button.textContent='Identificando requisitos...';
-    try{const form=new FormData();if(file)form.append('jobFile',file);else form.append('jobText',text);const response=await fetch('/api/job-skills',{method:'POST',body:form}),data=await response.json();if(!response.ok)throw new Error(data.error||'Falha ao identificar requisitos.');if(!data.skills.length)throw new Error('Não encontrei competências explícitas na vaga. Revise o texto ou preencha os requisitos manualmente.');renderSkillQuestions(data.skills);if(data.reviewStatus!=='completed')document.getElementById('profileStatus').textContent='Termos candidatos extraídos do texto. O Jev não está configurado para validar os requisitos; confira-os antes de responder.';}
+    try{const form=new FormData();if(file)form.append('jobFile',file);else form.append('jobText',text);const response=await fetch('/api/job-skills',{method:'POST',body:form}),data=await response.json();if(!response.ok)throw new Error(data.error||'Falha ao identificar requisitos.');if(!data.skills.length)throw new Error('Não encontrei competências explícitas na vaga. Revise o texto ou preencha os requisitos manualmente.');renderSkillQuestions(data.skills.map(skill=>({skill,context:data.contexts?.[skill.toLowerCase()]})));if(data.reviewStatus!=='completed')document.getElementById('profileStatus').textContent='Requisitos extraídos por IA; Jev indisponível para a validação semântica. Confira os termos antes de responder.';}
     catch(error){alert(error.message)}finally{button.disabled=false;button.textContent='Identificar requisitos e responder';}
   }
   document.addEventListener('DOMContentLoaded',async()=>{
