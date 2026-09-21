@@ -77,6 +77,32 @@ export async function reviewClaimsWithClient(
   return { status: 'completed' as const, provider: 'typesafe', model: process.env.TYPESAFE_MODEL ?? 'jev-latest', confidenceFloor: CONFIDENCE_FLOOR, claims: reviews };
 }
 
+export async function reviewJobSkillsWithClient(jobText: string, skills: string[], client: TypeSafeClient) {
+  if (!skills.length) return { status: 'completed' as const, provider: 'typesafe', model: process.env.TYPESAFE_MODEL ?? 'jev-latest', skills: [] as Array<{ skill: string; verdict: 'present' | 'absent' | 'review'; confidence: number }> };
+  const response = await client.systemOne({
+    model: process.env.TYPESAFE_MODEL ?? 'jev-latest',
+    state: { job_description: jobText.slice(0, 24_000), candidate_skills: skills },
+    questions: Object.fromEntries(skills.map((skill, index) => [`skill_${index}`, choice(
+      { question: 'Esta competência aparece explicitamente como requisito ou tecnologia na descrição da vaga?', skill },
+      { present: 'A vaga menciona explicitamente essa competência ou uma equivalência direta.', absent: 'A vaga não menciona essa competência de forma explícita.', review: 'A relação é ambígua ou apenas inferida a partir de contexto genérico.' },
+    )])),
+  });
+  const verified: Array<{ skill: string; verdict: 'present' | 'review'; confidence: number }> = [];
+  skills.forEach((skill, index) => {
+    const answer = response.answers[`skill_${index}`] as { choice: string; confidence: number };
+    if (answer.confidence < CONFIDENCE_FLOOR || !['present', 'absent'].includes(answer.choice)) verified.push({ skill, verdict: 'review', confidence: answer.confidence });
+    else if (answer.choice === 'present') verified.push({ skill, verdict: 'present', confidence: answer.confidence });
+  });
+  return { status: 'completed' as const, provider: 'typesafe', model: process.env.TYPESAFE_MODEL ?? 'jev-latest', skills: verified };
+}
+
+export async function verifyJobSkills(jobText: string, skills: string[]) {
+  if (!process.env.TYPESAFE_API_KEY) return { status: 'not_configured' as const, provider: 'typesafe', skills: skills.map(skill => ({ skill, verdict: 'review' as const, confidence: 0 })) };
+  const client = new TypeSafeClient({ apiKey: process.env.TYPESAFE_API_KEY, defaultModel: process.env.TYPESAFE_MODEL ?? 'jev-latest', timeout: 30_000, retry: { maxRetries: 1 } });
+  try { return await reviewJobSkillsWithClient(jobText, skills, client); }
+  catch { return { status: 'unavailable' as const, provider: 'typesafe', skills: skills.map(skill => ({ skill, verdict: 'review' as const, confidence: 0 })) }; }
+}
+
 export async function reviewResumeEvidence(sourceResume: string, resumeData: ResumeData) {
   if (!process.env.TYPESAFE_API_KEY) {
     return { status: 'not_configured' as const, provider: 'typesafe', message: 'TYPESAFE_API_KEY não configurada; afirmações aguardam revisão humana.', claims: claimsFromResume(resumeData).map(({ id, claim }) => ({ id, claim, verdict: 'review' as const, confidence: null })) };

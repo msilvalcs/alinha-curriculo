@@ -7,12 +7,37 @@ import { fileURLToPath } from 'node:url';
 import { extractDocumentText } from './text-extraction.js';
 import { adaptResume } from './resume-agent.js';
 import { renderPdf } from './pdf-render.js';
+import { loadSkillProfile, saveSkillProfile, skillProfileSchema } from './skill-profile.js';
+import { verifyJobSkills } from './typesafe-review.js';
 
 const app = Fastify({ logger: true });
 await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
 await app.register(fastifyStatic, { root: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'outputs'), index: 'index.html' });
 
 app.get('/health', async () => ({ ok: true, service: 'alinhacv' }));
+app.get('/api/profile', async () => loadSkillProfile());
+app.put('/api/profile', async (request, reply) => {
+  const parsed = skillProfileSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: 'Perfil de competências inválido.', details: parsed.error.flatten() });
+  return saveSkillProfile(parsed.data);
+});
+
+app.post('/api/job-skills', async (request, reply) => {
+  try {
+    const parts = request.parts();
+    let job = '';
+    for await (const part of parts) {
+      if (part.type === 'file' && part.fieldname === 'jobFile') job = await extractDocumentText(part.filename, await part.toBuffer());
+      else if (part.type === 'field' && part.fieldname === 'jobText') job = String(part.value);
+    }
+    if (job.trim().length < 20) return reply.code(400).send({ error: 'A descrição da vaga precisa ter pelo menos 20 caracteres.' });
+    const knownTerms = ['JavaScript', 'TypeScript', 'React', 'Vue', 'Angular', 'HTML', 'CSS', 'responsive design', 'component-based architecture', 'Storybook', 'Node.js', 'Python', 'Java', 'C#', '.NET', 'ASP.NET Core', 'SQL', 'MySQL', 'PostgreSQL', 'MongoDB', 'Git', 'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP', 'REST API', 'GraphQL', 'Scrum', 'Kanban', 'Agile', 'Figma', 'Excel', 'Power BI', 'Tableau', 'English', 'Português', 'Inglês', 'Espanhol'];
+    const candidates = knownTerms.filter(term => new RegExp(`(^|[^\\p{L}\\p{N}])${term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}([^\\p{L}\\p{N}]|$)`, 'iu').test(job));
+    const review = await verifyJobSkills(job, candidates);
+    const accepted: string[] = review.status === 'completed' ? review.skills.filter((item: { verdict: string }) => item.verdict === 'present').map((item: { skill: string }) => item.skill) : candidates;
+    return { skills: accepted.slice(0, 30), reviewStatus: review.status, review, requiresManualReview: review.status !== 'completed' };
+  } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Falha ao ler a descrição da vaga.' }); }
+});
 
 app.post('/api/render-pdf', async (request, reply) => {
   try {
@@ -27,6 +52,7 @@ app.post('/api/analyze', async (request, reply) => {
   const parts = request.parts();
   let resume = '';
   let job = '';
+  let profile = { skills: [] as Array<{ skill: string; status: 'experienced' | 'learning' | 'none'; level?: 'basic' | 'intermediate' | 'advanced'; evidence?: string }> };
   for await (const part of parts) {
     if (part.type === 'file') {
       const buffer = await part.toBuffer();
@@ -35,9 +61,12 @@ app.post('/api/analyze', async (request, reply) => {
       if (part.fieldname === 'jobFile') job = text;
     } else if (part.fieldname === 'resumeText') resume = String(part.value);
     else if (part.fieldname === 'jobText') job = String(part.value);
+    else if (part.fieldname === 'skillProfile') {
+      try { profile = skillProfileSchema.parse(JSON.parse(String(part.value))); } catch { return reply.code(400).send({ error: 'Confirme o perfil de competências novamente.' }); }
+    }
   }
   if (!resume.trim() || !job.trim()) return reply.code(400).send({ error: 'Currículo e descrição da vaga são obrigatórios.' });
-  return { ...(await adaptResume(resume, job)), resumeText: resume, jobText: job };
+  return { ...(await adaptResume(resume, job, profile)), resumeText: resume, jobText: job };
 });
 
 app.listen({ port: Number(process.env.PORT ?? 3000), host: '127.0.0.1' });
